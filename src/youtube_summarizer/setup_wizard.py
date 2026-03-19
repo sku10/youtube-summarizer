@@ -77,6 +77,67 @@ def _warn(msg: str) -> None:
     print(f"  {WARN} {msg}")
 
 
+def _parse_version(v: str) -> tuple[int, ...]:
+    """Parse version string like '0.17.5' into comparable tuple."""
+    import re
+    parts = re.findall(r'\d+', v)
+    return tuple(int(p) for p in parts) if parts else (0,)
+
+
+def _fetch_latest_ollama_version() -> str | None:
+    """Fetch latest Ollama version from GitHub releases."""
+    import urllib.request
+    import json
+    try:
+        req = urllib.request.Request(
+            "https://api.github.com/repos/ollama/ollama/releases/latest",
+            headers={"Accept": "application/vnd.github+json", "User-Agent": "youtube-summarizer"},
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            tag = json.loads(resp.read())["tag_name"]
+            return tag.lstrip("v")
+    except Exception:
+        return None
+
+
+def _check_ollama_update(version: str) -> None:
+    """Check latest Ollama version from GitHub and offer to update if outdated."""
+    latest = _fetch_latest_ollama_version()
+    if not latest:
+        _info("Could not check for updates (no internet?)")
+        return
+    try:
+        current = _parse_version(version)
+        newest = _parse_version(latest)
+        if current >= newest:
+            _item(True, f"Ollama is up to date ({version})")
+        else:
+            _warn(f"Ollama {version} → {latest} available")
+            _info("Newer versions support more models and fix bugs")
+            _info("Update: curl -fsSL https://ollama.com/install.sh | sh")
+            if _ask("Update Ollama now?"):
+                code, out = _run("curl -fsSL https://ollama.com/install.sh | sh")
+                if code == 0:
+                    code2, out2 = _run("ollama --version", show=False)
+                    new_ver = out2.strip().split("version is ")[-1] if "version" in out2 else out2.strip()
+                    _item(True, f"Ollama updated to {new_ver}")
+                else:
+                    _item(False, f"Update failed: {out[:200]}")
+    except Exception:
+        pass  # Don't block wizard on version parse errors
+
+
+def _start_ollama_background() -> None:
+    """Start ollama serve as a detached background process."""
+    _info("Starting Ollama server in background...")
+    subprocess.Popen(
+        ["ollama", "serve"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+
+
 def run_wizard() -> None:
     """Run the full interactive setup wizard."""
     env_path = Path.cwd() / ".env"
@@ -173,6 +234,9 @@ def run_wizard() -> None:
         version = out.strip().split("version is ")[-1] if "version" in out else out.strip()
         _item(True, f"Ollama installed ({version})")
 
+        # Check if update is available — compare with minimum known-good version
+        _check_ollama_update(version)
+
         # Check if running
         from . import llm
         ollama_running = llm.ollama_is_running()
@@ -205,7 +269,7 @@ def run_wizard() -> None:
         else:
             _item(False, "Ollama server not running")
             if _ask("Start Ollama now?"):
-                _run("ollama serve &", show=True)
+                _start_ollama_background()
                 import time
                 time.sleep(3)
                 ollama_running = llm.ollama_is_running()
@@ -219,7 +283,7 @@ def run_wizard() -> None:
                 code, out = _run("curl -fsSL https://ollama.com/install.sh | sh")
                 _item(code == 0, "Ollama " + ("installed" if code == 0 else "install failed"))
                 if code == 0:
-                    _run("ollama serve &", show=True)
+                    _start_ollama_background()
                     import time
                     time.sleep(3)
         elif sys.platform == "darwin":
