@@ -656,4 +656,8 @@ def api_delete_prompt(key: str):
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5100)
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--port", type=int, default=5100)
+    args = parser.parse_args()
+    app.run(host="0.0.0.0", port=args.port)

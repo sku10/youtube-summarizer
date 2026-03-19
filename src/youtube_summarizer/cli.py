@@ -9,6 +9,67 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+SERVICE_NAME = "yt-summarize"
+
+
+def _install_service(port: int) -> None:
+    """Install systemd user service."""
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    venv_python = shutil.which("python") or sys.executable
+    project_dir = Path.cwd()
+    env_file = project_dir / ".env"
+
+    service_dir = Path.home() / ".config" / "systemd" / "user"
+    service_dir.mkdir(parents=True, exist_ok=True)
+    service_file = service_dir / f"{SERVICE_NAME}.service"
+
+    unit = f"""[Unit]
+Description=YouTube Summarizer Web Dashboard
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory={project_dir}
+ExecStart={venv_python} -m youtube_summarizer.app --port {port}
+Restart=on-failure
+RestartSec=5
+{'EnvironmentFile=' + str(env_file) if env_file.exists() else ''}
+
+[Install]
+WantedBy=default.target
+"""
+    service_file.write_text(unit)
+    subprocess.run(["systemctl", "--user", "daemon-reload"])
+    subprocess.run(["systemctl", "--user", "enable", SERVICE_NAME])
+    subprocess.run(["systemctl", "--user", "start", SERVICE_NAME])
+    # Enable lingering so service runs without active login session
+    subprocess.run(["loginctl", "enable-linger"], capture_output=True)
+
+    print(f"Service installed and started.")
+    print(f"  Dashboard: http://localhost:{port}")
+    print(f"  Status:    systemctl --user status {SERVICE_NAME}")
+    print(f"  Logs:      journalctl --user -u {SERVICE_NAME} -f")
+    print(f"  Stop:      systemctl --user stop {SERVICE_NAME}")
+    print(f"  Remove:    yt-summarize --uninstall-service")
+
+
+def _uninstall_service() -> None:
+    """Remove systemd user service."""
+    import subprocess
+    from pathlib import Path
+
+    subprocess.run(["systemctl", "--user", "stop", SERVICE_NAME], capture_output=True)
+    subprocess.run(["systemctl", "--user", "disable", SERVICE_NAME], capture_output=True)
+    service_file = Path.home() / ".config" / "systemd" / "user" / f"{SERVICE_NAME}.service"
+    if service_file.exists():
+        service_file.unlink()
+    subprocess.run(["systemctl", "--user", "daemon-reload"])
+    print(f"Service removed.")
+
+
 def _summarize(args) -> None:
     from .transcript import fetch_transcript, parse_video_id, transcript_to_text
     from .metadata import fetch_metadata
@@ -127,12 +188,24 @@ def main() -> None:
                         help="Run the setup wizard")
     parser.add_argument("--list", action="store_true",
                         help="List all stored videos")
+    parser.add_argument("--install-service", action="store_true",
+                        help="Install as systemd user service (auto-starts on login)")
+    parser.add_argument("--uninstall-service", action="store_true",
+                        help="Remove the systemd user service")
 
     args = parser.parse_args()
 
     if args.setup:
         from .setup_wizard import run_wizard
         run_wizard()
+        return
+
+    if args.install_service:
+        _install_service(args.port)
+        return
+
+    if args.uninstall_service:
+        _uninstall_service()
         return
 
     if args.serve:
