@@ -253,7 +253,7 @@ def run_wizard() -> None:
             if ollama_models:
                 _item(True, f"{len(ollama_models)} model(s) available")
                 chat_models = [m for m in ollama_models
-                               if m["family"] not in ("bert",) and m["size_gb"] > 0]
+                               if m["family"] not in ("bert",) and (m["size_gb"] > 0 or m.get("cloud"))]
                 if chat_models:
                     print(f"    {'─' * 40}")
                     for m in chat_models[:10]:
@@ -409,12 +409,12 @@ def run_wizard() -> None:
         chosen = os.environ.get("LLM_PROVIDER", "ollama")
         if chosen == "ollama" and ollama_models:
             current_model = os.environ.get("OLLAMA_MODEL", "")
-            model_names = [m["name"] for m in ollama_models if m["size_gb"] > 0]
+            model_names = [m["name"] for m in ollama_models if m.get("size_gb", 0) > 0 or m.get("cloud")]
             if current_model and current_model in model_names:
                 _item(True, f"Ollama model: {current_model}")
             elif model_names:
-                # Pick a sensible default
-                preferred = ["qwen3.5:9b", "qwen3.5:27b", "qwen3:14b", "qwen3:8b", "llama3.1:latest"]
+                # Pick a sensible default — cloud first
+                preferred = ["qwen3.5:cloud", "qwen3.5:9b", "qwen3.5:27b", "qwen3:14b", "qwen3:8b", "llama3.1:latest"]
                 picked = next((p for p in preferred if p in model_names), model_names[0])
                 env_vars["OLLAMA_MODEL"] = picked
                 _item(True, f"Ollama model: {picked}")

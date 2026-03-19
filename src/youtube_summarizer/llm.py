@@ -49,7 +49,7 @@ def get_model(provider: Optional[str] = None) -> str:
     if provider == "ollama":
         models = list_ollama_models()
         if models:
-            model_names = [m["name"] for m in models if m.get("size_gb", 0) > 0]
+            model_names = [m["name"] for m in models if m.get("size_gb", 0) > 0 or m.get("cloud")]
             if model_names:
                 # Prefer cloud models first, then local by size
                 preferred = ["qwen3.5:cloud", "deepseek-v3.1:671b-cloud", "qwen3-vl:235b-cloud",
@@ -186,7 +186,11 @@ def list_ollama_models() -> list[dict]:
     """List models available in Ollama."""
     url = f"{get_ollama_url()}/api/tags"
     try:
-        req = urllib.request.Request(url)
+        headers = {}
+        api_key = os.environ.get("OLLAMA_API_KEY")
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        req = urllib.request.Request(url, headers=headers)
         with urllib.request.urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read().decode())
         return [
@@ -195,6 +199,7 @@ def list_ollama_models() -> list[dict]:
                 "size_gb": round(m.get("size", 0) / 1e9, 1),
                 "family": m.get("details", {}).get("family", ""),
                 "params": m.get("details", {}).get("parameter_size", ""),
+                "cloud": "cloud" in m["name"] or bool(m.get("remote_host")),
             }
             for m in data.get("models", [])
         ]
