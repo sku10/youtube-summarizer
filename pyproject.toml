@@ -3,7 +3,7 @@ name = "youtube-summarizer"
 version = "0.1.0"
 description = "Fetch YouTube transcripts and summarize them with local or cloud LLMs."
 authors = [{name = "Sami Kuisma", email = "sami.kuisma@gmail.com"}]
-# readme = "README.md"  # uncomment when README exists
+readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "youtube-transcript-api>=1.0.0",
