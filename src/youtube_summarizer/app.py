@@ -56,7 +56,7 @@ TEMPLATE = """
       background: #0d1117; color: #cdd9e5; border: 1px solid #30363d;
       border-radius: 6px; margin-bottom: 0.75rem;
     }
-    textarea { resize: vertical; min-height: 60px; }
+    textarea { resize: vertical; min-height: 120px; font-family: inherit; font-size: 0.85rem; }
     button {
       padding: 0.5rem 1.25rem; font-size: 0.95rem; font-weight: 600;
       border: none; border-radius: 6px; cursor: pointer;
