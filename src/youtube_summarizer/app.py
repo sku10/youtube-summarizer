@@ -26,6 +26,7 @@ from .storage import (
 from .transcript import fetch_transcript, parse_video_id, transcript_to_text
 
 app = Flask(__name__)
+init_default_prompts()
 
 TEMPLATE = """
 <!doctype html>

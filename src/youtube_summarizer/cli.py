@@ -12,9 +12,10 @@ load_dotenv()
 def _summarize(args) -> None:
     from .transcript import fetch_transcript, parse_video_id, transcript_to_text
     from .metadata import fetch_metadata
-    from .storage import save_metadata, save_transcript, save_summary, load_transcript
+    from .storage import save_metadata, save_transcript, save_summary, load_transcript, init_default_prompts
     from .llm import chat, get_provider, get_model
     from .prompts import build_prompt
+    init_default_prompts()
 
     source = args.url
     video_id = parse_video_id(source)
