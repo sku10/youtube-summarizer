@@ -187,6 +187,7 @@ def test_connection(provider: Optional[str] = None,
 def list_ollama_models() -> list[dict]:
     """List models available in Ollama."""
     url = f"{get_ollama_url()}/api/tags"
+    is_cloud_url = "ollama.com" in get_ollama_url()
     try:
         headers = {}
         api_key = os.environ.get("OLLAMA_API_KEY")
@@ -201,7 +202,7 @@ def list_ollama_models() -> list[dict]:
                 "size_gb": round(m.get("size", 0) / 1e9, 1),
                 "family": m.get("details", {}).get("family", ""),
                 "params": m.get("details", {}).get("parameter_size", ""),
-                "cloud": "cloud" in m["name"] or bool(m.get("remote_host")),
+                "cloud": is_cloud_url or "cloud" in m["name"] or bool(m.get("remote_host")),
             }
             for m in data.get("models", [])
         ]
