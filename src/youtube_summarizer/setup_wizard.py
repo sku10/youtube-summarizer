@@ -224,20 +224,27 @@ def run_wizard() -> None:
     _item(True, f"CPU: {cpu_name}")
 
     # ── Ollama ──
-    _header("Ollama (Local LLM)")
+    _header("Ollama")
     ollama_bin = shutil.which("ollama")
     ollama_running = False
     ollama_models: list[dict] = []
+    ollama_cloud = False
+
+    # Check for existing Ollama cloud config
+    existing_ollama_key = os.environ.get("OLLAMA_API_KEY", "")
+    existing_ollama_url = os.environ.get("OLLAMA_URL", "")
+    if existing_ollama_key and "ollama.com" in existing_ollama_url:
+        ollama_cloud = True
 
     if ollama_bin:
         code, out = _run("ollama --version", show=False)
         version = out.strip().split("version is ")[-1] if "version" in out else out.strip()
         _item(True, f"Ollama installed ({version})")
 
-        # Check if update is available — compare with minimum known-good version
+        # Check if update is available
         _check_ollama_update(version)
 
-        # Check if running
+        # Check if running locally
         from . import llm
         ollama_running = llm.ollama_is_running()
         if ollama_running:
@@ -245,7 +252,6 @@ def run_wizard() -> None:
             ollama_models = llm.list_ollama_models()
             if ollama_models:
                 _item(True, f"{len(ollama_models)} model(s) available")
-                # Show non-embedding models
                 chat_models = [m for m in ollama_models
                                if m["family"] not in ("bert",) and m["size_gb"] > 0]
                 if chat_models:
@@ -294,6 +300,44 @@ def run_wizard() -> None:
         else:
             _info("Download from: https://ollama.com/download")
 
+    # ── Ollama Cloud ──
+    if not ollama_cloud:
+        _header("Ollama Cloud")
+        _info("Run big models (671B, 235B) on Ollama's cloud — no GPU needed")
+        _info("Get API key: https://ollama.com/settings/keys")
+        if _ask("Set up Ollama cloud?"):
+            new_key = _ask_input("Paste Ollama API key")
+            if new_key:
+                os.environ["OLLAMA_API_KEY"] = new_key
+                os.environ["OLLAMA_URL"] = "https://ollama.com"
+                env_vars["OLLAMA_API_KEY"] = new_key
+                env_vars["OLLAMA_URL"] = "https://ollama.com"
+                ollama_cloud = True
+                _item(True, "Ollama cloud key saved")
+
+                # List available cloud models and offer to pull one
+                _info("Recommended cloud models:")
+                cloud_models = [
+                    ("qwen3.5:cloud", "fast, good for summarization"),
+                    ("deepseek-v3.1:671b-cloud", "large, highest quality"),
+                    ("qwen3-vl:235b-cloud", "multimodal, vision capable"),
+                ]
+                for model_name, desc in cloud_models:
+                    print(f"      {model_name:35s} — {desc}")
+                model_choice = _ask_input("Which cloud model? (or press Enter for qwen3.5:cloud)")
+                if not model_choice:
+                    model_choice = "qwen3.5:cloud"
+                env_vars["OLLAMA_MODEL"] = model_choice
+                os.environ["OLLAMA_MODEL"] = model_choice
+                _item(True, f"Ollama cloud model: {model_choice}")
+    else:
+        _header("Ollama Cloud")
+        masked = existing_ollama_key[:4] + "..." + existing_ollama_key[-4:] if len(existing_ollama_key) > 8 else "***"
+        _item(True, f"Ollama cloud configured (key: {masked})")
+        current_model = os.environ.get("OLLAMA_MODEL", "")
+        if current_model:
+            _item(True, f"Model: {current_model}")
+
     # ── Cloud API Keys ──
     _header("Cloud LLM Providers")
     providers = [
@@ -332,12 +376,17 @@ def run_wizard() -> None:
     if has_any_cloud:
         _info("Cloud provider(s) configured — faster, no local resources needed")
 
-    if not ollama_running and not has_any_cloud:
+    if ollama_cloud:
+        _info("Ollama cloud configured — big models, no local GPU needed")
+
+    if not ollama_running and not ollama_cloud and not has_any_cloud:
         _warn("No LLM provider available! Set up Ollama or a cloud API key.")
         _info("You can still fetch and store transcripts without summarization.")
     else:
         available = []
         if ollama_running:
+            available.append("ollama")
+        if ollama_cloud and "ollama" not in available:
             available.append("ollama")
         for env_var, name, _, _ in providers:
             if os.environ.get(env_var):
