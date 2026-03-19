@@ -1,0 +1,25 @@
+[project]
+name = "youtube-summarizer"
+version = "0.1.0"
+description = "Fetch YouTube transcripts and summarize them with local or cloud LLMs."
+authors = [{name = "Sami Kuisma", email = "sami.kuisma@gmail.com"}]
+# readme = "README.md"  # uncomment when README exists
+requires-python = ">=3.10"
+dependencies = [
+    "youtube-transcript-api>=1.0.0",
+    "flask>=2.3",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+metadata = ["yt-dlp>=2024.0.0"]
+
+[project.scripts]
+yt-summarize = "youtube_summarizer.cli:main"
+
+[tool.poetry]
+packages = [{include = "youtube_summarizer", from = "src"}]
+
+[build-system]
+requires = ["poetry-core>=1.5.0"]
+build-backend = "poetry.core.masonry.api"
