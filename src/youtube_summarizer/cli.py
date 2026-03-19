@@ -12,7 +12,7 @@ load_dotenv()
 def _summarize(args) -> None:
     from .transcript import fetch_transcript, parse_video_id, transcript_to_text
     from .metadata import fetch_metadata
-    from .storage import save_metadata, save_transcript, save_summary, load_transcript, init_default_prompts
+    from .storage import save_metadata, save_transcript, save_summary, load_transcript, load_metadata, init_default_prompts
     from .llm import chat, get_provider, get_model
     from .prompts import build_prompt
     init_default_prompts()
@@ -21,26 +21,33 @@ def _summarize(args) -> None:
     video_id = parse_video_id(source)
     languages = [l.strip() for l in args.language.split(",")] if args.language else None
 
-    # Fetch transcript
-    print(f"Fetching transcript for {video_id}...", flush=True)
-    try:
-        segments = fetch_transcript(video_id, languages=languages)
-    except RuntimeError as e:
-        print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+    # Use cached transcript if available
+    cached = load_transcript(video_id)
+    cached_meta = load_metadata(video_id) if cached else None
 
-    full_text = transcript_to_text(segments)
-    print(f"Transcript: {len(segments)} segments, {len(full_text)} chars")
-
-    # Fetch metadata
-    print("Fetching metadata...", flush=True)
-    metadata = fetch_metadata(video_id)
-    if metadata.get("title"):
-        print(f"Title: {metadata['title']}")
-
-    # Save raw data
-    save_metadata(video_id, metadata)
-    save_transcript(video_id, segments, full_text)
+    if cached and cached_meta:
+        segments = cached.get("segments", [])
+        full_text = cached.get("text", "")
+        metadata = cached_meta
+        print(f"Using cached transcript for {video_id} ({len(segments)} segments, {len(full_text)} chars)")
+        if metadata.get("title"):
+            ch = f" ({metadata['channel']})" if metadata.get("channel") else ""
+            print(f"Title: {metadata['title']}{ch}")
+    else:
+        print(f"Fetching transcript for {video_id}...", flush=True)
+        try:
+            segments = fetch_transcript(video_id, languages=languages)
+        except RuntimeError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+        full_text = transcript_to_text(segments)
+        print(f"Transcript: {len(segments)} segments, {len(full_text)} chars")
+        print("Fetching metadata...", flush=True)
+        metadata = fetch_metadata(video_id)
+        if metadata.get("title"):
+            print(f"Title: {metadata['title']}")
+        save_metadata(video_id, metadata)
+        save_transcript(video_id, segments, full_text)
 
     # LLM summarization
     if args.no_llm:

@@ -525,18 +525,22 @@ def api_summarize():
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
-    # Fetch transcript
-    try:
-        segments = fetch_transcript(video_id, languages=languages)
-    except RuntimeError as e:
-        return jsonify({"error": str(e)}), 422
-
-    full_text = transcript_to_text(segments)
-
-    # Fetch and save metadata
-    metadata = fetch_metadata(video_id)
-    save_metadata(video_id, metadata)
-    save_transcript(video_id, segments, full_text)
+    # Use cached transcript if available
+    cached_transcript = load_transcript(video_id)
+    cached_meta = load_metadata(video_id)
+    if cached_transcript and cached_meta:
+        full_text = cached_transcript.get("text", "")
+        metadata = cached_meta
+        segments = cached_transcript.get("segments", [])
+    else:
+        try:
+            segments = fetch_transcript(video_id, languages=languages)
+        except RuntimeError as e:
+            return jsonify({"error": str(e)}), 422
+        full_text = transcript_to_text(segments)
+        metadata = fetch_metadata(video_id)
+        save_metadata(video_id, metadata)
+        save_transcript(video_id, segments, full_text)
 
     result = {
         "video_id": video_id,
