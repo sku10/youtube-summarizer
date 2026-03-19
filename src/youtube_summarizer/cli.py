@@ -70,6 +70,28 @@ def _uninstall_service() -> None:
     print(f"Service removed.")
 
 
+def _update() -> None:
+    """Git pull and restart service if running."""
+    import subprocess
+    print("Pulling latest code...")
+    result = subprocess.run(["git", "pull"], capture_output=True, text=True)
+    print(result.stdout.strip())
+    if result.returncode != 0:
+        print(f"Git pull failed: {result.stderr.strip()}")
+        return
+
+    # Restart service if installed
+    check = subprocess.run(
+        ["systemctl", "--user", "is-active", SERVICE_NAME],
+        capture_output=True, text=True,
+    )
+    if check.stdout.strip() == "active":
+        subprocess.run(["systemctl", "--user", "restart", SERVICE_NAME])
+        print("Service restarted.")
+    else:
+        print("No running service found. Start with: yt-summarize --serve")
+
+
 def _summarize(args) -> None:
     from .transcript import fetch_transcript, parse_video_id, transcript_to_text
     from .metadata import fetch_metadata
@@ -192,12 +214,18 @@ def main() -> None:
                         help="Install as systemd user service (auto-starts on login)")
     parser.add_argument("--uninstall-service", action="store_true",
                         help="Remove the systemd user service")
+    parser.add_argument("--update", action="store_true",
+                        help="Git pull and restart service")
 
     args = parser.parse_args()
 
     if args.setup:
         from .setup_wizard import run_wizard
         run_wizard()
+        return
+
+    if args.update:
+        _update()
         return
 
     if args.install_service:
