@@ -79,6 +79,8 @@ curl "http://localhost:5100/api/search?q=machine+learning"
 
 Full API documentation with examples, agent integration patterns, and Python code snippets: **[API.md](API.md)**
 
+Autonomous agent setup guide (install, configure, validate — no human needed): **[AGENT_SETUP.md](AGENT_SETUP.md)**
+
 ## LLM Providers
 
 | Provider | Free Tier | Default Model | Get API Key |
