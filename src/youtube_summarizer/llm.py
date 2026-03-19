@@ -226,6 +226,22 @@ def list_ollama_models() -> list[dict]:
             seen.add(m["name"])
             result.append(m)
 
+    # Sort: cloud first (best models on top), then local
+    _cloud_rank = {
+        "qwen3.5": 0, "deepseek-v3": 1, "kimi-k2": 2, "minimax-m2": 3,
+        "gpt-oss": 4, "glm-5": 5, "cogito": 6,
+    }
+
+    def _sort_key(m):
+        is_cloud = 0 if m["cloud"] else 1
+        rank = 99
+        for prefix, r in _cloud_rank.items():
+            if m["name"].startswith(prefix):
+                rank = r
+                break
+        return (is_cloud, rank, m["name"])
+
+    result.sort(key=_sort_key)
     return result
 
 
