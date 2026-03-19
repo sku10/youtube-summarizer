@@ -1,5 +1,6 @@
 """Fetch YouTube transcripts."""
 
+import os
 import urllib.parse
 from typing import Iterable, Optional
 
@@ -8,6 +9,15 @@ from youtube_transcript_api import (
     TranscriptsDisabled,
     YouTubeTranscriptApi,
 )
+from youtube_transcript_api.proxies import GenericProxyConfig
+
+
+def _get_proxy_config() -> Optional[GenericProxyConfig]:
+    """Build proxy config from YOUTUBE_PROXY env var if set."""
+    proxy_url = os.environ.get("YOUTUBE_PROXY")
+    if proxy_url:
+        return GenericProxyConfig(https_url=proxy_url)
+    return None
 
 
 def parse_video_id(source: str) -> str:
@@ -38,7 +48,8 @@ def fetch_transcript(
     Raises RuntimeError if transcript unavailable.
     """
     try:
-        api = YouTubeTranscriptApi()
+        proxy = _get_proxy_config()
+        api = YouTubeTranscriptApi(proxy_config=proxy)
         if languages:
             transcript = api.fetch(video_id, languages=list(languages))
         else:
