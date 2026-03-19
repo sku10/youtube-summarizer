@@ -3,7 +3,7 @@
 import json
 import traceback
 
-from flask import Flask, jsonify, render_template_string, request
+from flask import Flask, jsonify, request
 
 from .llm import chat, get_model, get_provider, list_ollama_models, ollama_is_running
 from .metadata import fetch_metadata
@@ -186,7 +186,7 @@ document.addEventListener('drop', e => {
   $('urlInput').style.boxShadow = 'none';
   const text = (e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain') || '').trim();
   if (text && (text.includes('youtube.com') || text.includes('youtu.be'))) {
-    $('urlInput').value = text.split('\n')[0].trim();
+    $('urlInput').value = text.split('\\n')[0].trim();
     $('urlInput').focus();
   }
 });
@@ -447,7 +447,7 @@ refreshHistory();
 
 @app.route("/")
 def index():
-    return render_template_string(TEMPLATE)
+    return TEMPLATE
 
 
 @app.route("/api/health")
