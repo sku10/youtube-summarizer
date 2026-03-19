@@ -95,6 +95,82 @@ def list_videos() -> list[dict]:
     return results
 
 
+def _prompts_path() -> Path:
+    return _data_dir() / "prompts.json"
+
+
+def load_prompts() -> dict:
+    """Load all saved prompts. Returns {key: {title, text, created_at, last_used, use_count}}."""
+    path = _prompts_path()
+    if not path.exists():
+        return {}
+    return json.loads(path.read_text())
+
+
+def save_prompt(key: str, title: str, text: str) -> dict:
+    """Save or update a prompt. Returns the prompt entry."""
+    prompts = load_prompts()
+    now = _now()
+    if key in prompts:
+        prompts[key]["title"] = title
+        prompts[key]["text"] = text
+    else:
+        prompts[key] = {
+            "title": title,
+            "text": text,
+            "created_at": now,
+            "last_used": None,
+            "use_count": 0,
+        }
+    _prompts_path().write_text(json.dumps(prompts, ensure_ascii=False, indent=2))
+    return prompts[key]
+
+
+def record_prompt_use(key: str) -> None:
+    """Increment use_count and update last_used for a prompt."""
+    prompts = load_prompts()
+    if key in prompts:
+        prompts[key]["use_count"] = prompts[key].get("use_count", 0) + 1
+        prompts[key]["last_used"] = _now()
+        _prompts_path().write_text(json.dumps(prompts, ensure_ascii=False, indent=2))
+
+
+def delete_prompt(key: str) -> bool:
+    """Delete a prompt by key. Returns True if deleted."""
+    prompts = load_prompts()
+    if key in prompts:
+        del prompts[key]
+        _prompts_path().write_text(json.dumps(prompts, ensure_ascii=False, indent=2))
+        return True
+    return False
+
+
+def init_default_prompts() -> None:
+    """Seed default prompts if prompts.json doesn't exist."""
+    path = _prompts_path()
+    if path.exists():
+        return
+    from .prompts import EXECUTIVE_SUMMARY, KEY_POINTS, SYSTEM_PROMPT
+    now = _now()
+    defaults = {
+        "executive_summary": {
+            "title": "Executive Summary",
+            "text": EXECUTIVE_SUMMARY.replace("\n\nTranscript:\n{transcript}", ""),
+            "created_at": now,
+            "last_used": None,
+            "use_count": 0,
+        },
+        "key_points": {
+            "title": "Key Points",
+            "text": KEY_POINTS.replace("\n\nTranscript:\n{transcript}", ""),
+            "created_at": now,
+            "last_used": None,
+            "use_count": 0,
+        },
+    }
+    path.write_text(json.dumps(defaults, ensure_ascii=False, indent=2))
+
+
 def search_transcripts(query: str) -> list[dict]:
     """Search across all stored transcripts."""
     query_lower = query.lower()

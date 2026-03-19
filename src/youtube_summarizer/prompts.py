@@ -38,11 +38,17 @@ PROMPT_TYPES = {
 
 
 def build_prompt(transcript_text: str, prompt_type: str = "executive_summary",
-                 user_prompt: str = "") -> tuple[str, str]:
+                 user_prompt: str = "", prompt_text: str = "") -> tuple[str, str]:
     """Build system + user prompt pair.
+
+    If prompt_text is provided, use it directly (from stored prompt).
+    Otherwise fall back to built-in prompt_type templates.
 
     Returns (system_prompt, user_prompt).
     """
-    template = PROMPT_TYPES.get(prompt_type, CUSTOM)
-    user_msg = template.format(transcript=transcript_text, user_prompt=user_prompt)
+    if prompt_text:
+        user_msg = prompt_text + f"\n\nTranscript:\n{transcript_text}"
+    else:
+        template = PROMPT_TYPES.get(prompt_type, CUSTOM)
+        user_msg = template.format(transcript=transcript_text, user_prompt=user_prompt)
     return SYSTEM_PROMPT, user_msg

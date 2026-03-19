@@ -9,11 +9,16 @@ from .llm import chat, get_model, get_provider, list_ollama_models, ollama_is_ru
 from .metadata import fetch_metadata
 from .prompts import build_prompt
 from .storage import (
+    delete_prompt,
+    init_default_prompts,
     list_videos,
     load_metadata,
+    load_prompts,
     load_summaries,
     load_transcript,
+    record_prompt_use,
     save_metadata,
+    save_prompt,
     save_summary,
     save_transcript,
     search_transcripts,
@@ -99,13 +104,9 @@ TEMPLATE = """
     <label>YouTube URL or Video ID — paste, type, or drag & drop a link</label>
     <input id="urlInput" placeholder="https://www.youtube.com/watch?v=... or video ID">
     <div class="row">
-      <div>
+      <div style="flex:2;">
         <label>Prompt</label>
-        <select id="promptType">
-          <option value="executive_summary">Executive Summary</option>
-          <option value="key_points">Key Points</option>
-          <option value="custom">Custom Question</option>
-        </select>
+        <select id="promptType"><option>loading...</option></select>
       </div>
       <div>
         <label>Model</label>
@@ -116,10 +117,15 @@ TEMPLATE = """
         <input id="langInput" placeholder="en,fi">
       </div>
     </div>
-    <div id="customPromptWrap" style="display:none;">
-      <label>Your question</label>
-      <textarea id="customPrompt" placeholder="What tools or frameworks are mentioned?"></textarea>
+    <div id="promptEditor">
+      <label>Prompt text <span style="color:#768390;font-size:0.8rem;">(edit to customize, then save)</span></label>
+      <textarea id="promptText" rows="4" placeholder="Enter your prompt..."></textarea>
+      <div class="row" style="align-items:center;">
+        <input id="promptTitle" placeholder="Prompt title (optional)" style="margin-bottom:0;">
+        <button class="secondary" onclick="saveCurrentPrompt()" style="flex:none;margin-bottom:0;">Save Prompt</button>
+      </div>
     </div>
+    <div style="margin-top:0.75rem;">
     <button onclick="summarize()" id="goBtn">Summarize</button>
     <button class="secondary" onclick="fetchOnly()">Fetch Only (no LLM)</button>
     <div id="status"></div>
@@ -183,10 +189,71 @@ document.addEventListener('drop', e => {
   }
 });
 
-$('promptType').onchange = () => {
-  $('customPromptWrap').style.display =
-    $('promptType').value === 'custom' ? '' : 'none';
-};
+let allPrompts = [];
+
+async function loadPrompts() {
+  try {
+    const resp = await fetch('/api/prompts?sort=most_used');
+    allPrompts = await resp.json();
+    const sel = $('promptType');
+    sel.innerHTML = '';
+    // Add "Custom" option first
+    const custom = document.createElement('option');
+    custom.value = '__custom__'; custom.textContent = '— Custom / New —';
+    sel.appendChild(custom);
+    // Add saved prompts
+    allPrompts.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.key;
+      opt.textContent = p.title + (p.use_count ? ' (' + p.use_count + 'x)' : '');
+      sel.appendChild(opt);
+    });
+    // Select first saved prompt by default if available
+    if (allPrompts.length) {
+      sel.value = allPrompts[0].key;
+      onPromptChange();
+    }
+  } catch(e) {}
+}
+
+function onPromptChange() {
+  const key = $('promptType').value;
+  if (key === '__custom__') {
+    $('promptText').value = '';
+    $('promptTitle').value = '';
+    return;
+  }
+  const p = allPrompts.find(x => x.key === key);
+  if (p) {
+    $('promptText').value = p.text;
+    $('promptTitle').value = p.title;
+  }
+}
+
+$('promptType').onchange = onPromptChange;
+
+async function saveCurrentPrompt() {
+  const text = $('promptText').value.trim();
+  if (!text) return;
+  const title = $('promptTitle').value.trim() || text.slice(0, 50);
+  const currentKey = $('promptType').value;
+  const body = {text, title};
+  // If editing an existing prompt, keep the key
+  if (currentKey !== '__custom__') body.key = currentKey;
+  try {
+    const resp = await fetch('/api/prompts', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(body)
+    });
+    const data = await resp.json();
+    await loadPrompts();
+    $('promptType').value = data.key;
+    setStatus('Prompt saved: ' + title, 'ok');
+  } catch(e) {
+    setStatus('Failed to save prompt', 'err');
+  }
+}
 
 function showTab(name) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
@@ -205,17 +272,26 @@ async function summarize() {
   const url = $('urlInput').value.trim();
   if (!url) { setStatus('Enter a URL or video ID.', 'err'); return; }
   const langs = $('langInput').value.split(',').map(s => s.trim()).filter(Boolean);
-  const promptType = $('promptType').value;
-  const userPrompt = promptType === 'custom' ? $('customPrompt').value : '';
+  const promptKey = $('promptType').value;
+  const promptText = $('promptText').value.trim();
 
   $('goBtn').disabled = true;
   setStatus('Fetching transcript and summarizing...', 'loading');
+
+  const body = {url, languages: langs, model: $('modelInput').value.trim() || undefined};
+  if (promptKey !== '__custom__') {
+    body.prompt_key = promptKey;
+  }
+  if (promptText) {
+    body.user_prompt = promptText;
+    body.prompt_type = 'custom';
+  }
 
   try {
     const resp = await fetch('/api/summarize', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({url, languages: langs, prompt_type: promptType, user_prompt: userPrompt, model: $('modelInput').value.trim() || undefined})
+      body: JSON.stringify(body)
     });
     const data = await resp.json();
     if (!resp.ok) { setStatus(data.error || 'Failed', 'err'); return; }
@@ -359,6 +435,7 @@ fetch('/api/health').then(r => r.json()).then(d => {
   sel.value = current;
 }).catch(() => {});
 
+loadPrompts();
 refreshHistory();
 </script>
 </body>
@@ -453,14 +530,24 @@ def api_summarize():
     # Summarize
     provider = data.get("provider") or get_provider()
     model = data.get("model") or get_model(provider)
-    system_msg, user_msg = build_prompt(full_text, prompt_type, user_prompt)
+
+    # Check if using a stored prompt by key
+    prompt_key = data.get("prompt_key")
+    prompt_text = ""
+    if prompt_key:
+        prompts = load_prompts()
+        if prompt_key in prompts:
+            prompt_text = prompts[prompt_key]["text"]
+            record_prompt_use(prompt_key)
+
+    system_msg, user_msg = build_prompt(full_text, prompt_type, user_prompt, prompt_text=prompt_text)
 
     try:
         response = chat(system_msg, user_msg, provider=provider, model=model)
     except RuntimeError as e:
         return jsonify({"error": f"LLM error: {e}", **result}), 502
 
-    save_summary(video_id, prompt_type, user_prompt or prompt_type, model, response)
+    save_summary(video_id, prompt_key or prompt_type, user_prompt or prompt_type, model, response)
     result.update({
         "provider": provider,
         "model": model,
@@ -504,6 +591,41 @@ def api_search():
     if not q:
         return jsonify({"error": "query required"}), 400
     return jsonify(search_transcripts(q))
+
+
+@app.route("/api/prompts")
+def api_list_prompts():
+    init_default_prompts()
+    prompts = load_prompts()
+    sort = request.args.get("sort", "newest")
+    items = [{"key": k, **v} for k, v in prompts.items()]
+    if sort == "most_used":
+        items.sort(key=lambda x: x.get("use_count", 0), reverse=True)
+    else:
+        items.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    return jsonify(items)
+
+
+@app.route("/api/prompts", methods=["POST"])
+def api_save_prompt():
+    data = request.get_json(silent=True) or {}
+    title = data.get("title", "").strip()
+    text = data.get("text", "").strip()
+    if not text:
+        return jsonify({"error": "text required"}), 400
+    if not title:
+        title = text[:50]
+    from datetime import datetime
+    key = data.get("key") or f"{title.lower().replace(' ', '_')[:30]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    entry = save_prompt(key, title, text)
+    return jsonify({"key": key, **entry})
+
+
+@app.route("/api/prompts/<key>", methods=["DELETE"])
+def api_delete_prompt(key: str):
+    if delete_prompt(key):
+        return jsonify({"deleted": key})
+    return jsonify({"error": "not found"}), 404
 
 
 if __name__ == "__main__":
