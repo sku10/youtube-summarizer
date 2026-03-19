@@ -76,7 +76,8 @@ def _chat_ollama(system: str, user: str, model: str) -> str:
     num_ctx = os.environ.get("OLLAMA_NUM_CTX")
     if num_ctx:
         payload["options"] = {"num_ctx": int(num_ctx)}
-    resp = _http_post(url, payload, {"Content-Type": "application/json"}, timeout=300)
+    timeout = int(os.environ.get("OLLAMA_TIMEOUT", "600"))
+    resp = _http_post(url, payload, {"Content-Type": "application/json"}, timeout=timeout)
     return resp.get("message", {}).get("content", "")
 
 
