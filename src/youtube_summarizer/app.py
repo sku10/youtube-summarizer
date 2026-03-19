@@ -108,6 +108,10 @@ TEMPLATE = """
         </select>
       </div>
       <div>
+        <label>Model</label>
+        <input id="modelInput" placeholder="loading...">
+      </div>
+      <div>
         <label>Languages (optional)</label>
         <input id="langInput" placeholder="en,fi">
       </div>
@@ -190,7 +194,7 @@ async function summarize() {
     const resp = await fetch('/api/summarize', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({url, languages: langs, prompt_type: promptType, user_prompt: userPrompt})
+      body: JSON.stringify({url, languages: langs, prompt_type: promptType, user_prompt: userPrompt, model: $('modelInput').value.trim() || undefined})
     });
     const data = await resp.json();
     if (!resp.ok) { setStatus(data.error || 'Failed', 'err'); return; }
@@ -250,7 +254,7 @@ async function askFollowup() {
     const resp = await fetch('/api/ask', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({video_id: currentVideoId, prompt})
+      body: JSON.stringify({video_id: currentVideoId, prompt, model: $('modelInput').value.trim() || undefined})
     });
     const data = await resp.json();
     $('followupResult').textContent = resp.ok ? data.response : (data.error || 'Failed');
@@ -311,6 +315,12 @@ async function doSearch() {
     $('searchResult').textContent = 'Error: ' + e.message;
   }
 }
+
+// Load current model from health endpoint
+fetch('/api/health').then(r => r.json()).then(d => {
+  $('modelInput').value = d.model || '';
+  $('modelInput').placeholder = d.provider + '/' + (d.model || '');
+}).catch(() => {});
 
 refreshHistory();
 </script>
