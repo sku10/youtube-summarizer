@@ -70,6 +70,42 @@ def _uninstall_service() -> None:
     print(f"Service removed.")
 
 
+def _service_ctl(action: str) -> None:
+    """Control the systemd user service."""
+    import subprocess
+    from pathlib import Path
+
+    service_file = Path.home() / ".config" / "systemd" / "user" / f"{SERVICE_NAME}.service"
+    if not service_file.exists():
+        print(f"Service not installed. Run: yt-summarize --install-service")
+        return
+
+    if action == "status":
+        result = subprocess.run(
+            ["systemctl", "--user", "status", SERVICE_NAME],
+            capture_output=True, text=True,
+        )
+        print(result.stdout.strip())
+        # Also show URL if running
+        if "active (running)" in result.stdout:
+            # Parse port from service file
+            for line in service_file.read_text().splitlines():
+                if "--port" in line:
+                    port = line.split("--port")[-1].strip().split()[0]
+                    print(f"\n  Dashboard: http://localhost:{port}")
+                    break
+            else:
+                print(f"\n  Dashboard: http://localhost:5100")
+    else:
+        subprocess.run(["systemctl", "--user", action, SERVICE_NAME])
+        if action == "start":
+            print("Service started.")
+        elif action == "stop":
+            print("Service stopped.")
+        elif action == "restart":
+            print("Service restarted.")
+
+
 def _update() -> None:
     """Git pull and restart service if running."""
     import subprocess
@@ -214,6 +250,14 @@ def main() -> None:
                         help="Install as systemd user service (auto-starts on login)")
     parser.add_argument("--uninstall-service", action="store_true",
                         help="Remove the systemd user service")
+    parser.add_argument("--status", action="store_true",
+                        help="Show service status")
+    parser.add_argument("--start", action="store_true",
+                        help="Start the background service")
+    parser.add_argument("--stop", action="store_true",
+                        help="Stop the background service")
+    parser.add_argument("--restart", action="store_true",
+                        help="Restart the background service")
     parser.add_argument("--update", action="store_true",
                         help="Git pull and restart service")
 
@@ -234,6 +278,22 @@ def main() -> None:
 
     if args.uninstall_service:
         _uninstall_service()
+        return
+
+    if args.status:
+        _service_ctl("status")
+        return
+
+    if args.start:
+        _service_ctl("start")
+        return
+
+    if args.stop:
+        _service_ctl("stop")
+        return
+
+    if args.restart:
+        _service_ctl("restart")
         return
 
     if args.serve:
