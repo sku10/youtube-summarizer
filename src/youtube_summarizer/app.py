@@ -301,7 +301,7 @@ async function summarize() {
     currentVideoId = data.video_id;
     setStatus(
       (data.title ? data.title + ' — ' : '') +
-      'Summarized with ' + data.model, 'ok'
+      (data.channel ? data.channel + ' · ' : '') + 'Summarized with ' + data.model, 'ok'
     );
     $('summaryResult').textContent = data.summary;
     if (data.transcript_text) {
@@ -371,12 +371,17 @@ async function refreshHistory() {
       $('historyList').textContent = 'No videos yet.';
       return;
     }
-    $('historyList').innerHTML = videos.map(v =>
-      '<div class="video-item" onclick="loadVideo(\\'' + v.video_id + '\\')">' +
-        '<div><div class="title">' + (v.title || v.video_id) + '</div>' +
-        '<div class="meta">' + v.video_id + ' · ' + (v.summary_count || 0) + ' summaries</div></div>' +
-      '</div>'
-    ).join('');
+    $('historyList').innerHTML = videos.map(v => {
+      const channel = v.channel ? v.channel + ' · ' : '';
+      const date = v.saved_at ? new Date(v.saved_at).toLocaleDateString() : '';
+      return '<div class="video-item" onclick="loadVideo(\\'' + v.video_id + '\\')">' +
+        '<div style="flex:1;min-width:0;">' +
+          '<div class="title">' + (v.title || v.video_id) + '</div>' +
+          '<div class="meta">' + channel + (v.summary_count || 0) + ' summaries · ' + date + '</div>' +
+          '<div class="meta"><a href="' + (v.url || 'https://youtube.com/watch?v=' + v.video_id) + '" target="_blank" style="color:#58a6ff;" onclick="event.stopPropagation();">' + v.video_id + '</a></div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
   } catch(e) {
     $('historyList').textContent = 'Error loading history.';
   }
@@ -387,14 +392,28 @@ async function loadVideo(videoId) {
   try {
     const resp = await fetch('/api/videos/' + videoId);
     const data = await resp.json();
-    if (data.metadata && data.metadata.title) {
-      setStatus(data.metadata.title, 'ok');
+    const m = data.metadata || {};
+    if (m.title) {
+      const ch = m.channel ? ' · ' + m.channel : '';
+      setStatus(m.title + ch, 'ok');
     }
     if (data.transcript && data.transcript.text) {
       $('transcriptResult').textContent = data.transcript.text;
     }
     if (data.summaries && data.summaries.length) {
-      $('summaryResult').textContent = data.summaries[data.summaries.length - 1].response;
+      const el = $('summaryResult');
+      el.innerHTML = '';
+      data.summaries.slice().reverse().forEach((s, i) => {
+        const date = s.created_at ? new Date(s.created_at).toLocaleString() : '';
+        const header = document.createElement('div');
+        header.style.cssText = 'color:#768390;font-size:0.8rem;margin-bottom:0.25rem;' + (i > 0 ? 'margin-top:1rem;border-top:1px solid #30363d;padding-top:0.75rem;' : '');
+        header.textContent = (s.prompt_type || 'custom') + ' · ' + (s.model || '?') + ' · ' + date;
+        el.appendChild(header);
+        const body = document.createElement('div');
+        body.style.whiteSpace = 'pre-wrap';
+        body.textContent = s.response;
+        el.appendChild(body);
+      });
     }
     showTab('summary');
     document.querySelectorAll('.tab')[0].click();
@@ -522,6 +541,8 @@ def api_summarize():
     result = {
         "video_id": video_id,
         "title": metadata.get("title"),
+        "channel": metadata.get("channel"),
+        "url": metadata.get("url"),
         "transcript_length": len(segments),
         "transcript_text": full_text[:2000],
     }
