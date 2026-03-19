@@ -212,19 +212,19 @@ def list_ollama_models() -> list[dict]:
     seen = set()
     result = []
 
-    # Always try local Ollama
-    for m in _fetch_ollama_models("http://localhost:11434"):
-        if m["name"] not in seen:
-            seen.add(m["name"])
-            result.append(m)
-
-    # Also query Ollama cloud if API key is set
+    # Query Ollama cloud first if API key is set
     api_key = os.environ.get("OLLAMA_API_KEY", "")
     if api_key:
         for m in _fetch_ollama_models("https://ollama.com", api_key, is_cloud=True):
             if m["name"] not in seen:
                 seen.add(m["name"])
                 result.append(m)
+
+    # Then local Ollama
+    for m in _fetch_ollama_models("http://localhost:11434"):
+        if m["name"] not in seen:
+            seen.add(m["name"])
+            result.append(m)
 
     return result
 
