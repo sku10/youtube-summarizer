@@ -109,7 +109,7 @@ TEMPLATE = """
       </div>
       <div>
         <label>Model</label>
-        <input id="modelInput" placeholder="loading...">
+        <select id="modelInput"><option>loading...</option></select>
       </div>
       <div>
         <label>Languages (optional)</label>
@@ -316,10 +316,24 @@ async function doSearch() {
   }
 }
 
-// Load current model from health endpoint
+// Load available models from health endpoint
 fetch('/api/health').then(r => r.json()).then(d => {
-  $('modelInput').value = d.model || '';
-  $('modelInput').placeholder = d.provider + '/' + (d.model || '');
+  const sel = $('modelInput');
+  sel.innerHTML = '';
+  const models = d.available_models || [];
+  const current = d.model || '';
+  if (!models.length) {
+    sel.innerHTML = '<option>' + (current || 'no models') + '</option>';
+    return;
+  }
+  // Put current model first if it's in the list
+  const sorted = [current, ...models.filter(m => m !== current)];
+  sorted.forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m; opt.textContent = m;
+    sel.appendChild(opt);
+  });
+  sel.value = current;
 }).catch(() => {});
 
 refreshHistory();
@@ -338,12 +352,15 @@ def index():
 def health():
     provider = get_provider()
     model = get_model(provider)
+    models = list_ollama_models()
+    model_names = [m["name"] for m in models]
     return jsonify({
         "status": "ok",
         "provider": provider,
         "model": model,
         "ollama_running": ollama_is_running(),
-        "ollama_models": len(list_ollama_models()),
+        "ollama_models": len(models),
+        "available_models": model_names,
     })
 
 
