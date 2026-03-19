@@ -126,8 +126,9 @@ TEMPLATE = """
       </div>
     </div>
     <div style="margin-top:0.75rem;">
-    <button onclick="summarize()" id="goBtn">Summarize</button>
-    <button class="secondary" onclick="fetchOnly()">Fetch Only (no LLM)</button>
+      <button onclick="summarize()" id="goBtn">Summarize</button>
+      <button class="secondary" onclick="fetchOnly()">Fetch Only (no LLM)</button>
+    </div>
     <div id="status"></div>
   </div>
 
@@ -213,7 +214,7 @@ async function loadPrompts() {
       sel.value = allPrompts[0].key;
       onPromptChange();
     }
-  } catch(e) {}
+  } catch(e) { console.error('loadPrompts:', e); }
 }
 
 function onPromptChange() {
@@ -433,7 +434,7 @@ fetch('/api/health').then(r => r.json()).then(d => {
     sel.appendChild(opt);
   });
   sel.value = current;
-}).catch(() => {});
+}).catch(e => { console.error('loadModels:', e); });
 
 loadPrompts();
 refreshHistory();
