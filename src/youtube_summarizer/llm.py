@@ -51,8 +51,9 @@ def get_model(provider: Optional[str] = None) -> str:
         if models:
             model_names = [m["name"] for m in models if m.get("size_gb", 0) > 0]
             if model_names:
-                # Prefer known good models in order
-                preferred = ["qwen3.5:9b", "qwen3.5:cloud", "qwen3.5:27b", "qwen3.5:3b",
+                # Prefer cloud models first, then local by size
+                preferred = ["qwen3.5:cloud", "deepseek-v3.1:671b-cloud", "qwen3-vl:235b-cloud",
+                             "qwen3.5:9b", "qwen3.5:27b", "qwen3.5:3b",
                              "qwen3.5:0.8b", "llama3.1:latest"]
                 for p in preferred:
                     if p in model_names:

@@ -326,8 +326,10 @@ fetch('/api/health').then(r => r.json()).then(d => {
     sel.innerHTML = '<option>' + (current || 'no models') + '</option>';
     return;
   }
-  // Put current model first if it's in the list
-  const sorted = [current, ...models.filter(m => m !== current)];
+  // Cloud models first, then local; current model always on top
+  const cloud = models.filter(m => m.includes('cloud') && m !== current);
+  const local = models.filter(m => !m.includes('cloud') && m !== current);
+  const sorted = [current, ...cloud, ...local];
   sorted.forEach(m => {
     const opt = document.createElement('option');
     opt.value = m; opt.textContent = m;
