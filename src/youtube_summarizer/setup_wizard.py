@@ -315,18 +315,23 @@ def run_wizard() -> None:
                 ollama_cloud = True
                 _item(True, "Ollama cloud key saved")
 
-                # List available cloud models and offer to pull one
-                _info("Recommended cloud models:")
-                cloud_models = [
-                    ("qwen3.5:cloud", "fast, good for summarization"),
-                    ("deepseek-v3.1:671b-cloud", "large, highest quality"),
-                    ("qwen3-vl:235b-cloud", "multimodal, vision capable"),
-                ]
-                for model_name, desc in cloud_models:
-                    print(f"      {model_name:35s} — {desc}")
-                model_choice = _ask_input("Which cloud model? (or press Enter for qwen3.5:cloud)")
-                if not model_choice:
-                    model_choice = "qwen3.5:cloud"
+                # List available cloud models from Ollama
+                from . import llm as llm_mod
+                all_models = llm_mod.list_ollama_models()
+                cloud_models = [m["name"] for m in all_models if m.get("cloud")]
+                if cloud_models:
+                    _info("Available cloud models:")
+                    for m in cloud_models:
+                        print(f"      {m}")
+                    default_cloud = "qwen3.5:cloud" if "qwen3.5:cloud" in cloud_models else cloud_models[0]
+                    model_choice = _ask_input(f"Which cloud model? (Enter for {default_cloud})")
+                    if not model_choice:
+                        model_choice = default_cloud
+                else:
+                    _info("Pull a cloud model first: ollama pull qwen3.5:cloud")
+                    model_choice = _ask_input("Model name (e.g. qwen3.5:cloud)")
+                    if not model_choice:
+                        model_choice = "qwen3.5:cloud"
                 env_vars["OLLAMA_MODEL"] = model_choice
                 os.environ["OLLAMA_MODEL"] = model_choice
                 _item(True, f"Ollama cloud model: {model_choice}")
