@@ -96,7 +96,7 @@ TEMPLATE = """
   <p class="subtitle">Fetch transcripts, summarize with LLMs, search your history</p>
 
   <div class="card">
-    <label>YouTube URL or Video ID</label>
+    <label>YouTube URL or Video ID — paste, type, or drag & drop a link</label>
     <input id="urlInput" placeholder="https://www.youtube.com/watch?v=... or video ID">
     <div class="row">
       <div>
@@ -161,6 +161,27 @@ TEMPLATE = """
 <script>
 const $ = id => document.getElementById(id);
 let currentVideoId = null;
+
+// Drag & drop URL support — works on the whole page
+document.addEventListener('dragover', e => {
+  e.preventDefault();
+  $('urlInput').style.borderColor = '#238636';
+  $('urlInput').style.boxShadow = '0 0 8px rgba(35,134,54,0.5)';
+});
+document.addEventListener('dragleave', e => {
+  $('urlInput').style.borderColor = '#30363d';
+  $('urlInput').style.boxShadow = 'none';
+});
+document.addEventListener('drop', e => {
+  e.preventDefault();
+  $('urlInput').style.borderColor = '#30363d';
+  $('urlInput').style.boxShadow = 'none';
+  const text = (e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain') || '').trim();
+  if (text && (text.includes('youtube.com') || text.includes('youtu.be'))) {
+    $('urlInput').value = text.split('\n')[0].trim();
+    $('urlInput').focus();
+  }
+});
 
 $('promptType').onchange = () => {
   $('customPromptWrap').style.display =
