@@ -42,7 +42,23 @@ def get_provider() -> str:
 def get_model(provider: Optional[str] = None) -> str:
     provider = provider or get_provider()
     cfg = PROVIDERS.get(provider, PROVIDERS["ollama"])
-    return os.environ.get(cfg["model_env"], cfg["default_model"])
+    env_model = os.environ.get(cfg["model_env"])
+    if env_model:
+        return env_model
+    # For ollama, try to pick from actually available models
+    if provider == "ollama":
+        models = list_ollama_models()
+        if models:
+            model_names = [m["name"] for m in models if m.get("size_gb", 0) > 0]
+            if model_names:
+                # Prefer known good models in order
+                preferred = ["qwen3.5:9b", "qwen3.5:cloud", "qwen3.5:27b", "qwen3.5:3b",
+                             "qwen3.5:0.8b", "llama3.1:latest"]
+                for p in preferred:
+                    if p in model_names:
+                        return p
+                return model_names[0]
+    return cfg["default_model"]
 
 
 def get_ollama_url() -> str:
