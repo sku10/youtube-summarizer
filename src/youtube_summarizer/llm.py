@@ -184,16 +184,13 @@ def test_connection(provider: Optional[str] = None,
         return False, str(e)
 
 
-def list_ollama_models() -> list[dict]:
-    """List models available in Ollama."""
-    url = f"{get_ollama_url()}/api/tags"
-    is_cloud_url = "ollama.com" in get_ollama_url()
+def _fetch_ollama_models(url: str, api_key: str = "", is_cloud: bool = False) -> list[dict]:
+    """Fetch models from a single Ollama endpoint."""
     try:
         headers = {}
-        api_key = os.environ.get("OLLAMA_API_KEY")
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
-        req = urllib.request.Request(url, headers=headers)
+        req = urllib.request.Request(f"{url}/api/tags", headers=headers)
         with urllib.request.urlopen(req, timeout=5) as resp:
             data = json.loads(resp.read().decode())
         return [
@@ -202,12 +199,34 @@ def list_ollama_models() -> list[dict]:
                 "size_gb": round(m.get("size", 0) / 1e9, 1),
                 "family": m.get("details", {}).get("family", ""),
                 "params": m.get("details", {}).get("parameter_size", ""),
-                "cloud": is_cloud_url or "cloud" in m["name"] or bool(m.get("remote_host")),
+                "cloud": is_cloud or "cloud" in m["name"] or bool(m.get("remote_host")),
             }
             for m in data.get("models", [])
         ]
     except Exception:
         return []
+
+
+def list_ollama_models() -> list[dict]:
+    """List models from both local Ollama and Ollama cloud (if configured)."""
+    seen = set()
+    result = []
+
+    # Always try local Ollama
+    for m in _fetch_ollama_models("http://localhost:11434"):
+        if m["name"] not in seen:
+            seen.add(m["name"])
+            result.append(m)
+
+    # Also query Ollama cloud if API key is set
+    api_key = os.environ.get("OLLAMA_API_KEY", "")
+    if api_key:
+        for m in _fetch_ollama_models("https://ollama.com", api_key, is_cloud=True):
+            if m["name"] not in seen:
+                seen.add(m["name"])
+                result.append(m)
+
+    return result
 
 
 def ollama_is_running() -> bool:
