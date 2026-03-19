@@ -342,6 +342,26 @@ def run_wizard() -> None:
         current_model = os.environ.get("OLLAMA_MODEL", "")
         if current_model:
             _item(True, f"Model: {current_model}")
+        if _ask("Change model?"):
+            from . import llm as llm_mod
+            all_models = llm_mod.list_ollama_models()
+            cloud_models = [m["name"] for m in all_models if m.get("cloud")]
+            local_models = [m["name"] for m in all_models if not m.get("cloud") and (m.get("size_gb", 0) > 0)]
+            if cloud_models:
+                _info("Cloud models:")
+                for m in cloud_models:
+                    print(f"      {m}")
+            if local_models:
+                _info("Local models:")
+                for m in local_models[:10]:
+                    print(f"      {m}")
+            default = "qwen3.5:cloud" if "qwen3.5:cloud" in cloud_models else (cloud_models[0] if cloud_models else current_model)
+            model_choice = _ask_input(f"Model (Enter for {default})")
+            if not model_choice:
+                model_choice = default
+            env_vars["OLLAMA_MODEL"] = model_choice
+            os.environ["OLLAMA_MODEL"] = model_choice
+            _item(True, f"Model changed to: {model_choice}")
 
     # ── Cloud API Keys ──
     _header("Cloud LLM Providers")
