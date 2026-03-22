@@ -82,8 +82,19 @@ def _http_post(url: str, payload: dict, headers: dict, timeout: int = 120) -> di
         raise RuntimeError(f"Cannot reach {url}: {e.reason}") from e
 
 
+def _ollama_url_for_model(model: str) -> str:
+    """Pick the right Ollama endpoint based on model name."""
+    if "cloud" in model or model.endswith("-cloud"):
+        # Cloud model — use cloud URL if configured, else default
+        api_key = os.environ.get("OLLAMA_API_KEY")
+        if api_key:
+            return "https://ollama.com"
+    # Local model — always use localhost
+    return "http://localhost:11434"
+
+
 def _chat_ollama(system: str, user: str, model: str) -> str:
-    url = f"{get_ollama_url()}/api/chat"
+    url = f"{_ollama_url_for_model(model)}/api/chat"
     payload = {
         "model": model,
         "messages": [
@@ -96,9 +107,10 @@ def _chat_ollama(system: str, user: str, model: str) -> str:
     if num_ctx:
         payload["options"] = {"num_ctx": int(num_ctx)}
     headers = {"Content-Type": "application/json"}
-    api_key = os.environ.get("OLLAMA_API_KEY")
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+    if "ollama.com" in url:
+        api_key = os.environ.get("OLLAMA_API_KEY")
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
     timeout = int(os.environ.get("OLLAMA_TIMEOUT", "600"))
     resp = _http_post(url, payload, headers, timeout=timeout)
     return resp.get("message", {}).get("content", "")
